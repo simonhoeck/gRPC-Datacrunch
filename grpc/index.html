@@ -318,6 +318,31 @@ main {
 .status-dot.loading { background: var(--yellow); animation: pulse .8s ease-in-out infinite; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
 
+/* ── Live indicator ── */
+.live-badge {
+  display: none;
+  align-items: center; gap: 5px;
+  font-size: 10px; font-weight: 700;
+  color: #3fb950;
+  letter-spacing: .6px;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border: 1px solid #3fb95040;
+  border-radius: 10px;
+  background: #3fb95010;
+}
+.live-badge.visible { display: flex; }
+.live-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #3fb950;
+  animation: livepulse 1.8s ease-in-out infinite;
+}
+@keyframes livepulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.7)} }
+
+/* ── New-die flash ── */
+@keyframes newdie { 0%{filter:brightness(4) saturate(0)} 100%{filter:brightness(1)} }
+.die.new-flash rect { animation: newdie .8s ease-out forwards; }
+
 /* ── Toast notification ── */
 #toast {
   position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
@@ -371,6 +396,9 @@ main {
     <button class="tog-btn active" id="btnJson">JSON</button>
     <button class="tog-btn"        id="btnMongo">MongoDB</button>
     <span class="status-dot" id="mongoDot" title="MongoDB nicht verbunden"></span>
+  </div>
+  <div class="live-badge" id="liveBadge">
+    <span class="live-dot"></span>LIVE
   </div>
   <div class="vdivider"></div>
   <div class="field-group">
@@ -454,7 +482,11 @@ const state = {
   activePid:   null,
   pinnedCid:   null,
   source:      'json',    // 'json' | 'mongo'
+  pollTimer:   null,
+  lastCounts:  {},        // pid → total doc count (for change detection)
 };
+
+const POLL_INTERVAL_MS = 10_000;
 
 // ─── Data source helpers ──────────────────────────────────────────────────────
 function collectionUrl(name) {
@@ -502,9 +534,134 @@ async function checkMongo() {
   }
 }
 
+// ─── Live polling ─────────────────────────────────────────────────────────────
+function startPolling() {
+  stopPolling();
+  state.pollTimer = setInterval(pollForUpdates, POLL_INTERVAL_MS);
+  document.getElementById('liveBadge').classList.add('visible');
+}
+
+function stopPolling() {
+  clearInterval(state.pollTimer);
+  state.pollTimer = null;
+  document.getElementById('liveBadge').classList.remove('visible');
+}
+
+async function pollForUpdates() {
+  try {
+    const res = await fetch('/api/counts');
+    if (!res.ok) return;
+    const counts = await res.json();
+    if (counts.error) return;
+
+    let reloadNeeded = false;
+
+    for (const [pid, info] of Object.entries(counts)) {
+      const newTotal = info.total || 0;
+      const oldTotal = state.lastCounts[pid] ?? null;
+
+      // Completely new production_id → needs full reload
+      if (!state.productions.has(pid)) {
+        reloadNeeded = true;
+        continue;
+      }
+
+      // More data for current production → incremental refresh
+      if (pid === state.activePid && oldTotal !== null && newTotal > oldTotal) {
+        state.lastCounts[pid] = newTotal;
+        await refreshProduction(pid);
+      } else {
+        state.lastCounts[pid] = newTotal;
+      }
+    }
+
+    if (reloadNeeded) {
+      await reloadData();
+    }
+  } catch (_) {
+    // silently ignore poll errors (network blip etc.)
+  }
+}
+
+async function refreshProduction(pid) {
+  const names = [
+    'preproduction_reports', 'creation_reports', 'transfer_reports',
+    'bonding_reports', 'pbi_reports', 'alignment_reports', 'pickup_reports',
+  ];
+  const results = await Promise.all(
+    names.map(n =>
+      fetch(`/api/${n}/production/${encodeURIComponent(pid)}`)
+        .then(r => r.ok ? r.json() : [])
+    )
+  );
+  const [preprod, creation, transfer, bonding, pbi, alignment, pickup] = results;
+
+  const byKey = (arr, key) => new Map(arr.map(r => [r[key], r]));
+  const creationByCid  = byKey(creation,  'component_id');
+  const transferByCid  = byKey(transfer,  'component_id');
+  const bondingByCid   = byKey(bonding,   'component_id');
+  const pbiMap         = byKey(pbi,       'component_id');
+  const alignmentByCid = byKey(alignment, 'component_id');
+  const pickupByCid    = byKey(pickup,    'component_id');
+
+  const allCids = new Set([
+    ...creation.map(r => r.component_id),
+    ...bonding.map(r => r.component_id),
+  ]);
+
+  const newCids = [];
+  for (const cid of allCids) {
+    if (!state.components.has(cid)) newCids.push(cid);
+    const cr = creationByCid.get(cid)  || null;
+    const br = bondingByCid.get(cid)   || null;
+    state.components.set(cid, {
+      componentId:  cid,
+      productionId: pid,
+      creation:   cr,
+      bonding:    br,
+      transfer:   transferByCid.get(cid)  || null,
+      pbi:        pbiMap.get(cid)         || null,
+      alignment:  alignmentByCid.get(cid) || null,
+      pickup:     pickupByCid.get(cid)    || null,
+    });
+  }
+
+  if (!newCids.length) return; // nothing actually new
+
+  // Rebuild componentIds for this production
+  const prod = state.productions.get(pid);
+  prod.componentIds = [...state.components.entries()]
+    .filter(([, c]) => c.productionId === pid)
+    .map(([k]) => k);
+
+  // Update preproduction info if not yet present
+  if (preprod.length && !prod.preproduction) {
+    prod.preproduction = preprod[0];
+  }
+
+  // Re-render wafer maps (preserves pinnedCid)
+  renderProduction(pid);
+
+  // Flash new dies
+  requestAnimationFrame(() => {
+    for (const cid of newCids) {
+      document.querySelectorAll(`.die[data-cid="${cid}"]`).forEach(el => {
+        el.classList.remove('new-flash');
+        void el.offsetWidth; // reflow to restart animation
+        el.classList.add('new-flash');
+        setTimeout(() => el.classList.remove('new-flash'), 900);
+      });
+    }
+  });
+
+  const n = newCids.length;
+  toast(`+${n} neue Komponente${n > 1 ? 'n' : ''} empfangen`, 'ok');
+}
+
 // ─── Source toggle ────────────────────────────────────────────────────────────
 document.getElementById('btnJson').addEventListener('click', async () => {
   if (state.source === 'json') return;
+  stopPolling();
   state.source = 'json';
   document.getElementById('btnJson').classList.add('active');
   document.getElementById('btnMongo').classList.remove('active');
@@ -519,6 +676,7 @@ document.getElementById('btnMongo').addEventListener('click', async () => {
   document.getElementById('btnMongo').classList.add('active');
   document.getElementById('btnJson').classList.remove('active');
   await reloadData();
+  startPolling();
 });
 
 // ─── Data loading ─────────────────────────────────────────────────────────────
@@ -603,6 +761,11 @@ async function loadAll() {
     opt.value = pid;
     opt.textContent = `${pid.replace(/[<>]/g, '')}   [${n}× | ${mach} | ${ppid}]`;
     sel.appendChild(opt);
+  }
+
+  // Seed lastCounts so first poll has a baseline
+  for (const [pid, prod] of state.productions) {
+    state.lastCounts[pid] = prod.componentIds.length;
   }
 
   document.getElementById('loadingOverlay').style.display = 'none';

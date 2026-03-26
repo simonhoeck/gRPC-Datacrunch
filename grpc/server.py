@@ -102,6 +102,28 @@ def api_status():
         return json_resp({"connected": False, "error": str(exc)}, 503)
 
 
+@app.route("/api/counts")
+def api_counts():
+    """Component counts per production_id — used by the live polling mechanism."""
+    try:
+        db = get_db()
+        result = {}
+        pipeline = [{"$group": {"_id": "$production_id", "count": {"$sum": 1}}}]
+        for col in COLLECTIONS:
+            for doc in db[col].aggregate(pipeline):
+                pid = doc["_id"]
+                if pid is None:
+                    continue
+                if pid not in result:
+                    result[pid] = {}
+                result[pid][col.replace("_reports", "")] = doc["count"]
+        for pid in result:
+            result[pid]["total"] = sum(result[pid].values())
+        return json_resp(result)
+    except Exception as exc:
+        return json_resp({"error": str(exc)}, 503)
+
+
 @app.route("/api/<collection>")
 def api_collection(collection):
     """Return all documents from a MongoDB collection (excluding _id)."""
@@ -115,7 +137,7 @@ def api_collection(collection):
         return json_resp({"error": str(exc)}, 503)
 
 
-@app.route("/api/<collection>/production/<pid>")
+@app.route("/api/<collection>/production/<path:pid>")
 def api_collection_by_production(collection, pid):
     """Return documents filtered by production_id (faster for large collections)."""
     if collection not in COLLECTIONS:
