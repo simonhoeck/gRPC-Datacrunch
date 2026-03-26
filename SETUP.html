@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Die Bond Analyzer – Setup</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0d1117;
+    color: #e6edf3;
+    padding: 40px 20px;
+    line-height: 1.6;
+  }
+  .page {
+    max-width: 760px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 22px;
+    color: #58a6ff;
+    margin-bottom: 6px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .subtitle {
+    color: #8b949e;
+    font-size: 14px;
+    margin-bottom: 36px;
+  }
+
+  .step {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 32px;
+  }
+  .step-num {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: #1f6feb;
+    color: #fff;
+    font-weight: 700;
+    font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .step-body { flex: 1; }
+  .step-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #e6edf3;
+    margin-bottom: 8px;
+  }
+  .step-desc {
+    font-size: 13px;
+    color: #8b949e;
+    margin-bottom: 10px;
+  }
+
+  pre, code {
+    font-family: 'SFMono-Regular', Consolas, 'Courier New', monospace;
+    font-size: 13px;
+  }
+  pre {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    margin-bottom: 8px;
+    position: relative;
+  }
+  pre .comment { color: #6e7681; }
+  pre .cmd     { color: #79c0ff; }
+  pre .val     { color: #a5d6ff; }
+  pre .key     { color: #ff7b72; }
+  pre .str     { color: #a8ff96; }
+
+  .copy-btn {
+    position: absolute;
+    top: 8px; right: 8px;
+    background: #21262d;
+    border: 1px solid #30363d;
+    color: #8b949e;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+  }
+  .copy-btn:hover { color: #e6edf3; border-color: #8b949e; }
+  .copy-btn.copied { color: #3fb950; border-color: #3fb950; }
+
+  .note {
+    display: flex; gap: 10px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-left: 3px solid #58a6ff;
+    border-radius: 0 6px 6px 0;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: #8b949e;
+    margin-top: 8px;
+  }
+  .note.warn { border-left-color: #d29922; }
+  .note.ok   { border-left-color: #3fb950; }
+  .note-icon { flex-shrink: 0; font-size: 14px; }
+
+  .pill {
+    display: inline-block;
+    background: #21262d;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    padding: 1px 7px;
+    font-size: 12px;
+    font-family: monospace;
+    color: #a5d6ff;
+  }
+
+  .divider {
+    border: none;
+    border-top: 1px solid #21262d;
+    margin: 8px 0 24px;
+  }
+
+  .check-list {
+    list-style: none;
+    margin-top: 6px;
+  }
+  .check-list li {
+    font-size: 13px;
+    color: #8b949e;
+    padding: 3px 0;
+    display: flex; gap: 8px;
+  }
+  .check-list li::before {
+    content: '☐';
+    color: #30363d;
+    font-size: 14px;
+  }
+
+  .file-block {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  .file-name {
+    background: #21262d;
+    padding: 6px 14px;
+    font-size: 11px;
+    font-family: monospace;
+    color: #8b949e;
+    border-bottom: 1px solid #30363d;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .file-content {
+    padding: 12px 16px;
+    font-family: monospace;
+    font-size: 13px;
+  }
+
+  footer {
+    margin-top: 48px;
+    padding-top: 20px;
+    border-top: 1px solid #21262d;
+    font-size: 12px;
+    color: #6e7681;
+    text-align: center;
+  }
+  a { color: #58a6ff; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#58a6ff" stroke-width="1.8">
+      <polygon points="12 2 19 6 19 18 12 22 5 18 5 6"/>
+      <circle cx="12" cy="12" r="3" fill="#58a6ff" opacity=".5"/>
+    </svg>
+    Die Bond Analyzer – Setup
+  </h1>
+  <div class="subtitle">Schritt-für-Schritt Anleitung für den Zielrechner</div>
+
+  <hr class="divider">
+
+  <!-- Voraussetzungen -->
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-body">
+      <div class="step-title">Python installieren</div>
+      <div class="step-desc">
+        Python 3.10 oder neuer wird benötigt. Im Browser öffnen:
+      </div>
+      <pre><span class="cmd">https://www.python.org/downloads/</span></pre>
+      <div class="note">
+        <span class="note-icon">ℹ</span>
+        Bei der Installation <strong>"Add Python to PATH"</strong> aktivieren.
+      </div>
+      <div class="step-desc" style="margin-top:10px">Version prüfen:</div>
+      <pre><button class="copy-btn" onclick="copyPre(this)">Kopieren</button><span class="cmd">python --version</span></pre>
+    </div>
+  </div>
+
+  <!-- Dateien kopieren -->
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-body">
+      <div class="step-title">Projektdateien kopieren</div>
+      <div class="step-desc">
+        Das Repository von GitHub klonen <em>oder</em> den <span class="pill">grpc/</span> Ordner direkt auf den Rechner kopieren.
+      </div>
+      <pre><button class="copy-btn" onclick="copyPre(this)">Kopieren</button><span class="comment"># Option A – Git (falls installiert)</span>
+<span class="cmd">git clone https://github.com/simonhoeck/gRPC-Datacrunch.git</span>
+<span class="cmd">cd gRPC-Datacrunch\grpc</span></pre>
+      <pre><button class="copy-btn" onclick="copyPre(this)">Kopieren</button><span class="comment"># Option B – nur in den grpc-Ordner wechseln (falls manuell kopiert)</span>
+<span class="cmd">cd C:\Pfad\zum\grpc-Ordner</span></pre>
+    </div>
+  </div>
+
+  <!-- Pakete installieren -->
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-body">
+      <div class="step-title">Python-Pakete installieren</div>
+      <div class="step-desc">Einmalig ausführen (benötigt Internetzugang):</div>
+      <pre><button class="copy-btn" onclick="copyPre(this)">Kopieren</button><span class="cmd">pip install flask pymongo python-dotenv</span></pre>
+      <div class="note ok">
+        <span class="note-icon">✓</span>
+        Falls pip nicht gefunden: <code>python -m pip install flask pymongo python-dotenv</code>
+      </div>
+    </div>
+  </div>
+
+  <!-- .env anlegen -->
+  <div class="step">
+    <div class="step-num">4</div>
+    <div class="step-body">
+      <div class="step-title">.env Datei anlegen</div>
+      <div class="step-desc">
+        Im <span class="pill">grpc/</span> Ordner eine Datei namens <span class="pill">.env</span> erstellen
+        (keine Dateiendung!) mit folgendem Inhalt:
+      </div>
+      <div class="file-block">
+        <div class="file-name">
+          grpc\.env
+          <button class="copy-btn" style="position:static" onclick="copyBlock(this)">Kopieren</button>
+        </div>
+        <div class="file-content">
+          <span class="key">MONGO_HOST</span>=<span class="str">localhost</span><br>
+          <span class="key">MONGO_PORT</span>=<span class="val">27017</span><br>
+          <span class="key">MONGO_USER</span>=<span class="str">admin</span><br>
+          <span class="key">MONGO_PASSWORD</span>=<span class="str">SecurePasswort123</span><br>
+          <span class="key">MONGO_DB</span>=<span class="str">grpcdata</span><br>
+          <span class="key">PORT</span>=<span class="val">5001</span>
+        </div>
+      </div>
+      <div class="note warn">
+        <span class="note-icon">⚠</span>
+        Die Datei heißt <strong>.env</strong> – kein Dateiname davor, nur die Endung.
+        Im Windows-Explorer ggf. "Dateinamen-Erweiterungen anzeigen" aktivieren.
+      </div>
+    </div>
+  </div>
+
+  <!-- Server starten -->
+  <div class="step">
+    <div class="step-num">5</div>
+    <div class="step-body">
+      <div class="step-title">Server starten</div>
+      <div class="step-desc">
+        Eine Eingabeaufforderung (cmd) im <span class="pill">grpc/</span> Ordner öffnen und:
+      </div>
+      <pre><button class="copy-btn" onclick="copyPre(this)">Kopieren</button><span class="cmd">python server.py</span></pre>
+      <div class="step-desc" style="margin-top:8px">Erwartete Ausgabe:</div>
+      <pre style="color:#6e7681">  Die Bond Analyzer
+  --------------------------------------
+  URL      : http://localhost:5001
+  MongoDB  : ATRAPC0114:27017  /  DB: grpcdata
+  Mode     : JSON files  +  live MongoDB API
+  --------------------------------------
+ * Running on http://0.0.0.0:5001</pre>
+      <div class="note">
+        <span class="note-icon">ℹ</span>
+        Das Fenster muss <strong>offen bleiben</strong> solange die Anwendung läuft.
+        Mit <strong>Strg+C</strong> beenden.
+      </div>
+    </div>
+  </div>
+
+  <!-- Browser -->
+  <div class="step">
+    <div class="step-num">6</div>
+    <div class="step-body">
+      <div class="step-title">Browser öffnen</div>
+      <div class="step-desc">Im Browser (Chrome, Edge, Firefox) aufrufen:</div>
+      <pre><button class="copy-btn" onclick="copyPre(this)">Kopieren</button><a href="http://localhost:5001" target="_blank" style="color:#79c0ff">http://localhost:5001</a></pre>
+      <div class="note ok">
+        <span class="note-icon">✓</span>
+        Die Seite lädt automatisch die JSON-Dateien aus dem <span class="pill">grpc/</span> Ordner.
+        Für Live-Daten aus MongoDB oben rechts auf <strong>MongoDB</strong> klicken.
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- Checkliste -->
+  <div style="margin-bottom:32px">
+    <div class="step-title" style="margin-bottom:12px">Schnell-Checkliste</div>
+    <ul class="check-list">
+      <li>Python 3.10+ installiert, im PATH</li>
+      <li><code>pip install flask pymongo python-dotenv</code> ausgeführt</li>
+      <li><span class="pill">.env</span> Datei im <span class="pill">grpc/</span> Ordner vorhanden</li>
+      <li><span class="pill">server.py</span> läuft (cmd-Fenster offen)</li>
+      <li>MongoDB Docker-Container läuft (<code>docker compose up -d</code> im gRPC-Ordner)</li>
+      <li>Browser: <a href="http://localhost:5001">http://localhost:5001</a></li>
+    </ul>
+  </div>
+
+  <!-- Fehlersuche -->
+  <div style="margin-bottom:32px">
+    <div class="step-title" style="margin-bottom:12px">Häufige Probleme</div>
+
+    <div style="font-size:13px; font-weight:600; color:#8b949e; margin-bottom:4px">Port bereits belegt</div>
+    <div style="font-size:13px; color:#6e7681; margin-bottom:8px">In <span class="pill">.env</span> die Zeile <code>PORT=5001</code> auf einen anderen Wert ändern (z.B. 5002).</div>
+
+    <div style="font-size:13px; font-weight:600; color:#8b949e; margin-bottom:4px">MongoDB nicht verbunden (roter Punkt)</div>
+    <div style="font-size:13px; color:#6e7681; margin-bottom:8px">Netzwerkverbindung zu <span class="pill">ATRAPC0114</span> prüfen. JSON-Modus funktioniert auch ohne MongoDB.</div>
+
+    <div style="font-size:13px; font-weight:600; color:#8b949e; margin-bottom:4px">ModuleNotFoundError</div>
+    <div style="font-size:13px; color:#6e7681; margin-bottom:8px">pip-Befehl aus Schritt 3 noch einmal ausführen.</div>
+
+    <div style="font-size:13px; font-weight:600; color:#8b949e; margin-bottom:4px">.env wird nicht gefunden</div>
+    <div style="font-size:13px; color:#6e7681;">cmd muss im selben Ordner wie <span class="pill">server.py</span> geöffnet sein.</div>
+  </div>
+
+  <footer>
+    <a href="https://github.com/simonhoeck/gRPC-Datacrunch" target="_blank">github.com/simonhoeck/gRPC-Datacrunch</a>
+  </footer>
+
+</div>
+
+<script>
+function copyPre(btn) {
+  const pre = btn.closest('pre');
+  const text = pre.innerText.replace('Kopieren\n', '').trim();
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'Kopiert!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Kopieren'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+function copyBlock(btn) {
+  const block = btn.closest('.file-block').querySelector('.file-content');
+  const lines = [...block.querySelectorAll('span[class="key"]')].map(k => {
+    const eq = '=';
+    const val = k.nextSibling.nextElementSibling || k.nextSibling;
+    return k.textContent + eq + (val ? val.textContent : '');
+  });
+  // Fallback: just get innerText
+  const text = block.innerText.trim();
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'Kopiert!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Kopieren'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+</script>
+</body>
+</html>

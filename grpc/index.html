@@ -281,6 +281,59 @@ main {
 .grid-cell rect { pointer-events: none; }
 .axis-lbl { font-size: 9px; fill: #3d444d; font-family: monospace; }
 
+/* ── Source toggle ── */
+.source-toggle {
+  display: flex; align-items: center; gap: 0;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px;
+  flex-shrink: 0;
+}
+.tog-btn {
+  background: none; border: none; cursor: pointer;
+  color: var(--muted);
+  font-size: 12px; font-weight: 500;
+  padding: 4px 11px;
+  border-radius: 4px;
+  transition: background .15s, color .15s;
+  white-space: nowrap;
+}
+.tog-btn.active {
+  background: var(--bg2);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(0,0,0,.4);
+}
+.tog-btn:not(.active):hover { color: var(--text); }
+
+.status-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--border);
+  margin: 0 6px 0 4px;
+  flex-shrink: 0;
+  transition: background .3s;
+}
+.status-dot.ok      { background: var(--green); box-shadow: 0 0 5px #3fb95080; }
+.status-dot.err     { background: var(--red);   box-shadow: 0 0 5px #f8514980; }
+.status-dot.loading { background: var(--yellow); animation: pulse .8s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+/* ── Toast notification ── */
+#toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: var(--bg3); border: 1px solid var(--border);
+  color: var(--text); font-size: 12px;
+  padding: 9px 18px; border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.5);
+  opacity: 0; pointer-events: none;
+  transition: opacity .25s;
+  z-index: 500;
+  max-width: 480px; text-align: center;
+}
+#toast.show { opacity: 1; }
+#toast.toast-err { border-color: var(--red); color: var(--red); }
+#toast.toast-ok  { border-color: var(--green); color: var(--green); }
+
 /* ── Sparklines ── */
 .spark-block { margin-top: 6px; }
 .spark-row { margin-bottom: 8px; }
@@ -312,6 +365,12 @@ main {
       <circle cx="12" cy="12" r="3" fill="currentColor" opacity=".5"/>
     </svg>
     Die Bond Analyzer
+  </div>
+  <div class="vdivider"></div>
+  <div class="source-toggle">
+    <button class="tog-btn active" id="btnJson">JSON</button>
+    <button class="tog-btn"        id="btnMongo">MongoDB</button>
+    <span class="status-dot" id="mongoDot" title="MongoDB nicht verbunden"></span>
   </div>
   <div class="vdivider"></div>
   <div class="field-group">
@@ -385,6 +444,8 @@ main {
   </div>
 </main>
 
+<div id="toast"></div>
+
 <script>
 // ─── State ────────────────────────────────────────────────────────────────────
 const state = {
@@ -392,15 +453,98 @@ const state = {
   productions: new Map(), // pid → { preproduction, componentIds[] }
   activePid:   null,
   pinnedCid:   null,
+  source:      'json',    // 'json' | 'mongo'
 };
 
+// ─── Data source helpers ──────────────────────────────────────────────────────
+function collectionUrl(name) {
+  // name without extension, e.g. 'creation_reports'
+  return state.source === 'json'
+    ? `${name}.json`
+    : `/api/${name}`;
+}
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (type ? ` toast-${type}` : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ''; }, 3500);
+}
+
+// ─── MongoDB connection check ─────────────────────────────────────────────────
+async function checkMongo() {
+  const dot = document.getElementById('mongoDot');
+  dot.className = 'status-dot loading';
+  dot.title = 'Verbinde…';
+  try {
+    const res  = await fetch('/api/status');
+    const data = await res.json();
+    if (data.connected) {
+      dot.className = 'status-dot ok';
+      const total = Object.values(data.counts).reduce((a, b) => a + b, 0);
+      dot.title = `Verbunden: ${data.host} / ${data.db}  (${total.toLocaleString()} Dokumente)`;
+      const details = Object.entries(data.counts)
+        .map(([k, v]) => `${k.replace('_reports','')}: ${v}`)
+        .join('  |  ');
+      toast(`MongoDB verbunden — ${details}`, 'ok');
+      return true;
+    } else {
+      throw new Error(data.error || 'Unbekannter Fehler');
+    }
+  } catch (err) {
+    dot.className = 'status-dot err';
+    dot.title = 'Nicht verbunden: ' + err.message;
+    toast(`MongoDB Fehler: ${err.message}`, 'err');
+    return false;
+  }
+}
+
+// ─── Source toggle ────────────────────────────────────────────────────────────
+document.getElementById('btnJson').addEventListener('click', async () => {
+  if (state.source === 'json') return;
+  state.source = 'json';
+  document.getElementById('btnJson').classList.add('active');
+  document.getElementById('btnMongo').classList.remove('active');
+  await reloadData();
+});
+
+document.getElementById('btnMongo').addEventListener('click', async () => {
+  if (state.source === 'mongo') return;
+  const ok = await checkMongo();
+  if (!ok) return;
+  state.source = 'mongo';
+  document.getElementById('btnMongo').classList.add('active');
+  document.getElementById('btnJson').classList.remove('active');
+  await reloadData();
+});
+
 // ─── Data loading ─────────────────────────────────────────────────────────────
+async function reloadData() {
+  document.getElementById('loadingOverlay').style.display = 'flex';
+  document.getElementById('loadingOverlay').innerHTML =
+    '<div class="spinner"></div><p>Lade Daten…</p>';
+  state.components.clear();
+  state.productions.clear();
+  state.activePid  = null;
+  state.pinnedCid  = null;
+  // Reset dropdown
+  const sel = document.getElementById('prodSel');
+  sel.innerHTML = '<option value="">— Produktion wählen —</option>';
+  clearAll();
+  await loadAll();
+}
+
 async function loadAll() {
-  const files = ['preproduction_reports.json', 'creation_reports.json',
-                 'transfer_reports.json', 'bonding_reports.json', 'pbi_reports.json',
-                 'alignment_reports.json', 'pickup_reports.json'];
+  const names = ['preproduction_reports', 'creation_reports', 'transfer_reports',
+                 'bonding_reports', 'pbi_reports', 'alignment_reports', 'pickup_reports'];
   const [preprod, creation, transfer, bonding, pbi, alignment, pickup] = await Promise.all(
-    files.map(f => fetch(f).then(r => r.json()))
+    names.map(n => fetch(collectionUrl(n)).then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status} – ${n}`);
+      return r.json();
+    }))
   );
 
   // Index by component_id
@@ -444,8 +588,12 @@ async function loadAll() {
     state.productions.get(pid).componentIds.push(cid);
   }
 
-  // Populate dropdown
+  // Populate dropdown (first option was reset by reloadData or initial load)
   const sel = document.getElementById('prodSel');
+  if (sel.options.length > 1) {
+    // Initial load: clear placeholder duplication guard
+    while (sel.options.length > 1) sel.remove(1);
+  }
   for (const [pid, prod] of state.productions) {
     const pp = prod.preproduction?.report;
     const mach = pp?.machineName?.value || '';
@@ -964,11 +1112,14 @@ window.addEventListener('resize', () => {
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 loadAll().catch(err => {
   document.getElementById('loadingOverlay').innerHTML = `
-    <div style="color:var(--red);max-width:420px;text-align:center;padding:20px">
+    <div style="color:var(--red);max-width:440px;text-align:center;padding:20px">
       <div style="font-size:15px;margin-bottom:12px">Fehler beim Laden</div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:16px">${err.message}</div>
       <div style="font-size:12px;color:var(--muted);background:var(--bg3);padding:12px;border-radius:6px;font-family:monospace;text-align:left">
-        Starte einen lokalen Server im <b>grpc/</b> Verzeichnis:<br><br>
+        Starte den Flask-Server im <b>grpc/</b> Verzeichnis:<br><br>
+        pip install flask pymongo python-dotenv<br>
+        python server.py<br><br>
+        Oder einfacher:<br>
         python -m http.server 8080<br><br>
         Dann: <a href="http://localhost:8080" style="color:var(--accent)">localhost:8080</a>
       </div>
