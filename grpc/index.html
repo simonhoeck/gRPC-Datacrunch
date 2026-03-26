@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Die Bond Analyzer</title>
+<style>
+:root {
+  --bg:      #0d1117;
+  --bg2:     #161b22;
+  --bg3:     #21262d;
+  --border:  #30363d;
+  --text:    #e6edf3;
+  --muted:   #8b949e;
+  --accent:  #58a6ff;
+  --green:   #3fb950;
+  --yellow:  #d29922;
+  --red:     #f85149;
+  --die-good:    #1a4731;
+  --die-warn:    #4a3200;
+  --die-bad:     #4a1212;
+  --die-neutral: #0d2744;
+  --die-pbi-ok:  #1a4731;
+  --die-pbi-warn:#4a3200;
+  --die-pbi-bad: #4a1212;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* ── Loading ── */
+#loadingOverlay {
+  position: fixed; inset: 0;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 14px;
+  z-index: 999;
+}
+.spinner {
+  width: 32px; height: 32px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+#loadingOverlay p { color: var(--muted); font-size: 13px; }
+
+/* ── Header ── */
+header {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  height: 52px;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 20px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.logo {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--accent);
+  white-space: nowrap;
+  letter-spacing: .3px;
+  display: flex; align-items: center; gap: 7px;
+}
+.logo svg { opacity: .85; }
+.vdivider { width: 1px; height: 26px; background: var(--border); flex-shrink: 0; }
+
+.field-group { display: flex; align-items: center; gap: 8px; }
+.field-label {
+  font-size: 10px; font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase; letter-spacing: .6px;
+  white-space: nowrap;
+}
+select#prodSel {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 5px 30px 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  cursor: pointer;
+  min-width: 320px;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6' fill='none' stroke='%238b949e' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  outline: none;
+  transition: border-color .15s;
+}
+select#prodSel:focus { border-color: var(--accent); }
+
+.stats-row {
+  display: flex; gap: 0;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.stat {
+  padding: 0 16px;
+  border-left: 1px solid var(--border);
+  text-align: center;
+}
+.stat-v { font-size: 15px; font-weight: 600; color: var(--text); line-height: 1.3; }
+.stat-k { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+
+/* ── Main layout ── */
+main {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+/* Wafer area = flex 2 = 2/3 */
+.wafer-area {
+  flex: 2;
+  display: flex;
+  min-width: 0;
+  border-right: 1px solid var(--border);
+}
+
+.wafer-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-right: 1px solid var(--border);
+}
+.wafer-panel:last-child { border-right: none; }
+
+.panel-head {
+  height: 38px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 14px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  gap: 8px;
+}
+.ph-title {
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .7px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.ph-sub {
+  font-size: 11px; color: var(--accent);
+  font-family: monospace;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 55%;
+}
+
+.wafer-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  overflow: hidden;
+  position: relative;
+}
+
+.panel-foot {
+  height: 28px;
+  display: flex; align-items: center;
+  padding: 0 14px;
+  gap: 14px;
+  background: var(--bg2);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.legend-item {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 10px; color: var(--muted);
+}
+.legend-dot {
+  width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0;
+}
+
+/* Info panel = flex 1 = 1/3 */
+.info-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg2);
+}
+.info-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+/* Empty state */
+.empty-state {
+  height: 100%;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+.empty-state .icon { opacity: .25; }
+.empty-state .msg { font-size: 13px; }
+.empty-state .hint { font-size: 11px; opacity: .6; }
+
+/* Component info */
+.cid-badge {
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 10px;
+  color: var(--accent);
+  background: #1f6feb14;
+  border: 1px solid #1f6feb2a;
+  border-radius: 5px;
+  padding: 7px 10px;
+  margin-bottom: 14px;
+  word-break: break-all;
+  line-height: 1.6;
+}
+
+.section { margin-bottom: 14px; }
+.section-title {
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .7px;
+  color: var(--muted);
+  margin-bottom: 6px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--border);
+}
+.info-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 3.5px 0;
+  gap: 6px;
+}
+.info-key { color: var(--muted); flex-shrink: 0; }
+.info-val {
+  color: var(--text);
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 11px;
+  text-align: right;
+  word-break: break-word;
+}
+.info-val.good { color: var(--green); }
+.info-val.warn { color: var(--yellow); }
+.info-val.bad  { color: var(--red); }
+
+/* SVG die styling */
+.die {
+  cursor: pointer;
+}
+.die rect {
+  transition: filter .1s;
+}
+.die:hover rect {
+  filter: brightness(2.2) !important;
+  stroke: rgba(255,255,255,.8) !important;
+  stroke-width: 1.5px !important;
+}
+.die.active rect {
+  filter: brightness(2.5) !important;
+  stroke: var(--accent) !important;
+  stroke-width: 2px !important;
+}
+
+.grid-cell rect { pointer-events: none; }
+.axis-lbl { font-size: 9px; fill: #3d444d; font-family: monospace; }
+
+/* ── Sparklines ── */
+.spark-block { margin-top: 6px; }
+.spark-row { margin-bottom: 8px; }
+.spark-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 2px;
+}
+.spark-label { font-size: 10px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+.spark-range { font-size: 10px; color: var(--muted); font-family: monospace; }
+.spark-svg {
+  display: block; width: 100%;
+  border-radius: 3px;
+  background: #0d1117;
+}
+.spark-fill { opacity: .15; }
+</style>
+</head>
+<body>
+
+<div id="loadingOverlay">
+  <div class="spinner"></div>
+  <p>Lade Reportdaten…</p>
+</div>
+
+<header>
+  <div class="logo">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+      <polygon points="12 2 19 6 19 18 12 22 5 18 5 6"/>
+      <circle cx="12" cy="12" r="3" fill="currentColor" opacity=".5"/>
+    </svg>
+    Die Bond Analyzer
+  </div>
+  <div class="vdivider"></div>
+  <div class="field-group">
+    <span class="field-label">Production</span>
+    <select id="prodSel"><option value="">— Produktion wählen —</option></select>
+  </div>
+  <div class="stats-row">
+    <div class="stat"><div class="stat-v" id="sComp">—</div><div class="stat-k">Components</div></div>
+    <div class="stat"><div class="stat-v" id="sMach">—</div><div class="stat-k">Machine</div></div>
+    <div class="stat"><div class="stat-v" id="sSide">—</div><div class="stat-k">Side</div></div>
+    <div class="stat"><div class="stat-v" id="sPpid">—</div><div class="stat-k">PPID</div></div>
+  </div>
+</header>
+
+<main>
+  <div class="wafer-area">
+
+    <!-- Source wafer -->
+    <div class="wafer-panel">
+      <div class="panel-head">
+        <span class="ph-title">Source Wafer</span>
+        <span class="ph-sub" id="srcSubId">—</span>
+      </div>
+      <div class="wafer-wrap" id="srcWrap">
+        <svg id="srcSvg"></svg>
+      </div>
+      <div class="panel-foot">
+        <span style="font-size:10px;color:var(--muted);font-weight:600;letter-spacing:.4px;text-transform:uppercase">BinCode</span>
+        <div class="legend-item"><div class="legend-dot" style="background:#3fb950"></div>1 (gut)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#d29922"></div>2–10</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#f85149"></div>&gt;10</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#2d4a6e"></div>unbekannt</div>
+      </div>
+    </div>
+
+    <!-- Target substrate -->
+    <div class="wafer-panel">
+      <div class="panel-head">
+        <span class="ph-title">Target Substrate</span>
+        <span class="ph-sub" id="tgtSubId">—</span>
+      </div>
+      <div class="wafer-wrap" id="tgtWrap">
+        <svg id="tgtSvg"></svg>
+      </div>
+      <div class="panel-foot">
+        <span style="font-size:10px;color:var(--muted);font-weight:600;letter-spacing:.4px;text-transform:uppercase">PBI Offset</span>
+        <div class="legend-item"><div class="legend-dot" style="background:#3fb950"></div>&lt;2 µm</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#d29922"></div>&lt;5 µm</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#f85149"></div>&gt;5 µm</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#1a3a5c"></div>keine PBI</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Info panel -->
+  <div class="info-panel">
+    <div class="panel-head">
+      <span class="ph-title">Component Details</span>
+    </div>
+    <div class="info-scroll" id="infoScroll">
+      <div class="empty-state">
+        <svg class="icon" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3">
+          <circle cx="11" cy="11" r="8"/>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <div class="msg">Über eine Komponente fahren</div>
+        <div class="hint">um Details anzuzeigen</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+// ─── State ────────────────────────────────────────────────────────────────────
+const state = {
+  components:  new Map(), // cid → { componentId, productionId, creation, bonding, transfer, pbi }
+  productions: new Map(), // pid → { preproduction, componentIds[] }
+  activePid:   null,
+  pinnedCid:   null,
+};
+
+// ─── Data loading ─────────────────────────────────────────────────────────────
+async function loadAll() {
+  const files = ['preproduction_reports.json', 'creation_reports.json',
+                 'transfer_reports.json', 'bonding_reports.json', 'pbi_reports.json',
+                 'alignment_reports.json', 'pickup_reports.json'];
+  const [preprod, creation, transfer, bonding, pbi, alignment, pickup] = await Promise.all(
+    files.map(f => fetch(f).then(r => r.json()))
+  );
+
+  // Index by component_id
+  const byKey = (arr, key) => new Map(arr.map(r => [r[key], r]));
+  const creationByCid   = byKey(creation,   'component_id');
+  const transferByCid   = byKey(transfer,   'component_id');
+  const bondingByCid    = byKey(bonding,    'component_id');
+  const pbiMap          = byKey(pbi,        'component_id');
+  const alignmentByCid  = byKey(alignment,  'component_id');
+  const pickupByCid     = byKey(pickup,     'component_id');
+  const preprodByPid    = byKey(preprod,    'production_id');
+
+  // Collect all cids (from creation + bonding)
+  const allCids = new Set([
+    ...creation.map(r => r.component_id),
+    ...bonding.map(r => r.component_id),
+  ]);
+
+  for (const cid of allCids) {
+    const cr = creationByCid.get(cid) || null;
+    const br = bondingByCid.get(cid)  || null;
+    const pid = (cr || br).production_id;
+
+    state.components.set(cid, {
+      componentId:  cid,
+      productionId: pid,
+      creation:   cr,
+      bonding:    br,
+      transfer:   transferByCid.get(cid)  || null,
+      pbi:        pbiMap.get(cid)         || null,
+      alignment:  alignmentByCid.get(cid) || null,
+      pickup:     pickupByCid.get(cid)    || null,
+    });
+
+    if (!state.productions.has(pid)) {
+      state.productions.set(pid, {
+        preproduction: preprodByPid.get(pid) || null,
+        componentIds: [],
+      });
+    }
+    state.productions.get(pid).componentIds.push(cid);
+  }
+
+  // Populate dropdown
+  const sel = document.getElementById('prodSel');
+  for (const [pid, prod] of state.productions) {
+    const pp = prod.preproduction?.report;
+    const mach = pp?.machineName?.value || '';
+    const ppid = pp?.ppid?.value || '';
+    const n = prod.componentIds.length;
+    const opt = document.createElement('option');
+    opt.value = pid;
+    opt.textContent = `${pid.replace(/[<>]/g, '')}   [${n}× | ${mach} | ${ppid}]`;
+    sel.appendChild(opt);
+  }
+
+  document.getElementById('loadingOverlay').style.display = 'none';
+}
+
+// ─── Production change ────────────────────────────────────────────────────────
+document.getElementById('prodSel').addEventListener('change', e => {
+  state.activePid = e.target.value || null;
+  state.pinnedCid = null;
+  if (state.activePid) renderProduction(state.activePid);
+  else clearAll();
+});
+
+function clearAll() {
+  ['srcSvg','tgtSvg'].forEach(id => { document.getElementById(id).innerHTML = ''; });
+  ['srcSubId','tgtSubId'].forEach(id => { document.getElementById(id).textContent = '—'; });
+  ['sComp','sMach','sSide','sPpid'].forEach(id => { document.getElementById(id).textContent = '—'; });
+  showEmptyState();
+}
+
+function renderProduction(pid) {
+  const prod = state.productions.get(pid);
+  const pp = prod.preproduction?.report;
+
+  document.getElementById('sComp').textContent = prod.componentIds.length;
+  document.getElementById('sMach').textContent = pp?.machineName?.value || '—';
+  document.getElementById('sSide').textContent = pp?.side || '—';
+  document.getElementById('sPpid').textContent = pp?.ppid?.value || '—';
+
+  const comps = prod.componentIds.map(cid => state.components.get(cid));
+
+  // Source wafer
+  const srcComps = comps.filter(c => c.creation?.report?.sourceMaterialInfo);
+  const srcSub = srcComps[0]?.creation?.report?.sourceMaterialInfo?.substrateId?.value || '—';
+  document.getElementById('srcSubId').textContent = srcSub;
+  drawWafer('srcSvg', 'srcWrap', srcComps,
+    c => {
+      const m = c.creation.report.sourceMaterialInfo;
+      return { row: +m.row, col: +m.col };
+    },
+    c => binCodeColor(c.creation?.report?.sourceMaterialInfo?.binCode?.value),
+    'src'
+  );
+
+  // Target substrate
+  const tgtComps = comps.filter(c => c.bonding?.report?.targetMaterialInfo);
+  const tgtSub = tgtComps[0]?.bonding?.report?.targetMaterialInfo?.substrateId?.value || '—';
+  document.getElementById('tgtSubId').textContent = tgtSub;
+  drawWafer('tgtSvg', 'tgtWrap', tgtComps,
+    c => {
+      const m = c.bonding.report.targetMaterialInfo;
+      return { row: +m.row, col: +m.col };
+    },
+    c => pbiColor(c.pbi),
+    'tgt'
+  );
+
+  showEmptyState();
+}
+
+// ─── Wafer renderer ───────────────────────────────────────────────────────────
+function drawWafer(svgId, wrapId, comps, getPos, getColor, mapKey) {
+  const svg  = document.getElementById(svgId);
+  const wrap = document.getElementById(wrapId);
+  svg.innerHTML = '';
+  if (!comps.length) return;
+
+  const positions = comps.map(c => getPos(c));
+  const allRows = positions.map(p => p.row);
+  const allCols = positions.map(p => p.col);
+  const minRow = Math.min(...allRows), maxRow = Math.max(...allRows);
+  const minCol = Math.min(...allCols), maxCol = Math.max(...allCols);
+  const rowSpan = maxRow - minRow + 1;
+  const colSpan = maxCol - minCol + 1;
+
+  const rect = wrap.getBoundingClientRect();
+  const aw = rect.width  - 28;  // available width
+  const ah = rect.height - 28;  // available height
+  const AXIS = 26; // px for axis labels
+
+  // Square cells, fit in available space
+  const cs = Math.max(4, Math.floor(
+    Math.min((aw - AXIS) / (colSpan + .5), (ah - AXIS) / (rowSpan + .5))
+  ));
+  const gap   = Math.max(1, Math.round(cs * .1));
+  const ds    = cs - gap;   // die size (rect)
+  const svgW  = colSpan * cs + AXIS + 4;
+  const svgH  = rowSpan * cs + AXIS + 4;
+
+  svg.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`);
+  svg.setAttribute('width',  svgW);
+  svg.setAttribute('height', svgH);
+
+  // Coordinate transforms: 0,0 bottom-left
+  const toX = col => (col - minCol) * cs + AXIS;
+  const toY = row => (maxRow - row) * cs + 4;
+
+  // Draw subtle grid background for full extent
+  for (let r = minRow; r <= maxRow; r++) {
+    for (let c = minCol; c <= maxCol; c++) {
+      const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      bg.setAttribute('x', toX(c));
+      bg.setAttribute('y', toY(r));
+      bg.setAttribute('width',  ds);
+      bg.setAttribute('height', ds);
+      bg.setAttribute('fill', '#1a1f25');
+      bg.setAttribute('rx', Math.max(1, ds * .08));
+      svg.appendChild(bg);
+    }
+  }
+
+  // Axis labels – cols (bottom)
+  const colStep = Math.max(1, Math.ceil(colSpan / 10));
+  for (let c = minCol; c <= maxCol; c += colStep) {
+    const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    t.setAttribute('x', toX(c) + ds / 2);
+    t.setAttribute('y', svgH - 2);
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('class', 'axis-lbl');
+    t.textContent = c;
+    svg.appendChild(t);
+  }
+  // Axis labels – rows (left)
+  const rowStep = Math.max(1, Math.ceil(rowSpan / 8));
+  for (let r = minRow; r <= maxRow; r += rowStep) {
+    const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    t.setAttribute('x', AXIS - 3);
+    t.setAttribute('y', toY(r) + ds / 2 + 3);
+    t.setAttribute('text-anchor', 'end');
+    t.setAttribute('class', 'axis-lbl');
+    t.textContent = r;
+    svg.appendChild(t);
+  }
+  // Axis origin label (0,0 bottom-left)
+  const o = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  o.setAttribute('x', AXIS - 3);
+  o.setAttribute('y', svgH - 2);
+  o.setAttribute('text-anchor', 'end');
+  o.setAttribute('class', 'axis-lbl');
+  o.setAttribute('fill', '#3d6b8c');
+  o.textContent = '0';
+  svg.appendChild(o);
+
+  // Draw dies
+  for (let i = 0; i < comps.length; i++) {
+    const comp = comps[i];
+    const pos  = getPos(comp);
+    const color = getColor(comp);
+    const cid = comp.componentId;
+
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('class', 'die');
+    g.dataset.cid = cid;
+    g.dataset.map = mapKey;
+
+    const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    r.setAttribute('x',      toX(pos.col));
+    r.setAttribute('y',      toY(pos.row));
+    r.setAttribute('width',  ds);
+    r.setAttribute('height', ds);
+    r.setAttribute('fill',   color);
+    r.setAttribute('stroke', 'none');
+    r.setAttribute('rx',     Math.max(1, ds * .12));
+
+    g.appendChild(r);
+    g.addEventListener('mouseenter', () => onHover(cid));
+    g.addEventListener('mouseleave', () => onLeave());
+    g.addEventListener('click',      () => onPin(cid));
+    svg.appendChild(g);
+  }
+
+  // If pinned component is on this map, restore highlight
+  if (state.pinnedCid) applyHighlight(state.pinnedCid);
+}
+
+// ─── Interaction ──────────────────────────────────────────────────────────────
+function onHover(cid) {
+  if (state.pinnedCid) return; // don't override pinned
+  applyHighlight(cid);
+  showInfo(cid);
+}
+
+function onLeave() {
+  if (state.pinnedCid) return;
+  clearHighlights();
+  showEmptyState();
+}
+
+function onPin(cid) {
+  if (state.pinnedCid === cid) {
+    state.pinnedCid = null;
+    clearHighlights();
+    showEmptyState();
+  } else {
+    state.pinnedCid = cid;
+    applyHighlight(cid);
+    showInfo(cid);
+  }
+}
+
+function applyHighlight(cid) {
+  document.querySelectorAll('.die').forEach(el => {
+    el.classList.toggle('active', el.dataset.cid === cid);
+  });
+}
+
+function clearHighlights() {
+  document.querySelectorAll('.die.active').forEach(el => el.classList.remove('active'));
+}
+
+// ─── Colors ───────────────────────────────────────────────────────────────────
+function binCodeColor(v) {
+  if (v === undefined || v === null) return '#1a3a5c';
+  if (v === 1)  return '#238636';
+  if (v <= 10)  return '#9e6a03';
+  return '#b91c1c';
+}
+
+function pbiColor(pbiRec) {
+  const xy = pbiRec?.report?.postBondInspection?.measuredOffsetXY;
+  if (!xy || xy.x === undefined) return '#1a3a5c';
+  const d = Math.sqrt((xy.x||0)**2 + (xy.y||0)**2) * 1e6; // µm
+  if (d < 2)  return '#238636';
+  if (d < 5)  return '#9e6a03';
+  return '#b91c1c';
+}
+
+// ─── Info panel ───────────────────────────────────────────────────────────────
+function showEmptyState() {
+  document.getElementById('infoScroll').innerHTML = `
+    <div class="empty-state">
+      <svg class="icon" width="44" height="44" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="1.3">
+        <circle cx="11" cy="11" r="8"/>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <div class="msg">Über eine Komponente fahren</div>
+      <div class="hint">Klick = Auswahl fixieren</div>
+    </div>`;
+}
+
+function showInfo(cid) {
+  const comp = state.components.get(cid);
+  if (!comp) return;
+
+  const cr  = comp.creation?.report;
+  const br  = comp.bonding?.report;
+  const tr  = comp.transfer?.report;
+  const pr  = comp.pbi?.report;
+  const ar  = comp.alignment?.report;
+  const pkr = comp.pickup?.report;
+  const src = cr?.sourceMaterialInfo;
+  const tgt = br?.targetMaterialInfo;
+  const bp  = br?.bondProfile;
+  const pbi = pr?.postBondInspection;
+  const trI = tr?.componentCenterPickupInspection;
+  const trT = tr?.componentTransfer;
+
+  const parts = [];
+
+  // Component ID box
+  parts.push(`<div class="cid-badge">${cid}</div>`);
+
+  // Identification
+  parts.push(sec('Identifikation', [
+    ['Komponente', cr?.componentName || br?.componentName || '—'],
+    ['ppTool',     cr?.ppToolName || '—'],
+    ['BondPos',    cr?.bondingPositionName || '—'],
+    ['Produktion', comp.productionId?.replace(/[<>]/g,'') || '—'],
+  ]));
+
+  // Source
+  if (src) {
+    const bin = src.binCode?.value;
+    const binClass = bin === 1 ? 'good' : (bin <= 10 ? 'warn' : 'bad');
+    parts.push(sec('Source Wafer', [
+      ['Substrate',      src.substrateId?.value || '—'],
+      ['Carrier',        src.carrierId?.value || '—'],
+      ['Row / Col',      `${src.row} / ${src.col}`],
+      ['E142 Row/Col',   `${src.row_e142} / ${src.col_e142}`],
+      ['BinCode',        valSpan(bin ?? '—', binClass)],
+      ['Notch',          src.notch || '—'],
+      ['LotInfo PPID',   cr?.lotInfo?.ppId?.value || '—'],
+    ]));
+  }
+
+  // Target
+  if (tgt) {
+    parts.push(sec('Target Substrate', [
+      ['Substrate',    tgt.substrateId?.value || '—'],
+      ['Row / Col',    `${tgt.row} / ${tgt.col}`],
+      ['E142 Row/Col', `${tgt.row_e142} / ${tgt.col_e142}`],
+      ['Notch',        tgt.notch || '—'],
+    ]));
+  }
+
+  // Transfer
+  if (trI || trT) {
+    const rows = [];
+    const xy = trI?.measuredOffsetXY;
+    if (xy?.x !== undefined) {
+      const d = Math.sqrt((xy.x||0)**2 + (xy.y||0)**2) * 1e6;
+      const cls = d < 50 ? 'good' : d < 100 ? 'warn' : 'bad';
+      rows.push(['Offset X',    µm(xy.x)]);
+      rows.push(['Offset Y',    µm(xy.y)]);
+      rows.push(['|Offset|',    valSpan(d.toFixed(2) + ' µm', cls)]);
+    }
+    const theta = trI?.measuredOffsetTheta?.value;
+    if (theta !== undefined) rows.push(['Theta', deg(theta)]);
+    const xyz = trT?.transferPositionXYZ;
+    if (xyz?.x !== undefined) {
+      rows.push(['Transfer X', mm(xyz.x)]);
+      rows.push(['Transfer Y', mm(xyz.y)]);
+      rows.push(['Transfer Z', mm(xyz.z)]);
+    }
+    if (rows.length) parts.push(sec('Transfer', rows));
+  }
+
+  // Bond Profile
+  if (bp) {
+    const phases = [
+      ['AfterAlign W',  bp.afterAlignment?.targetPositionW?.value],
+      ['AfterAlign Z',  bp.afterAlignment?.targetPositionZ?.value],
+      ['Touchdown Z',   bp.touchdownDetected?.targetPositionZ?.value],
+      ['ForceRamp Z',   bp.forceRampStart?.targetPositionZ?.value],
+      ['AfterBond W',   bp.afterBondProfile?.targetPositionW?.value],
+      ['AfterBond Z',   bp.afterBondProfile?.targetPositionZ?.value],
+      ['ToolTip post',  bp.afterBondProfile?.targetPositionToolTip?.value],
+    ].map(([k, v]) => [k, v !== undefined ? mm(v) : '—']);
+    parts.push(sec('Bond Profil', phases));
+  }
+
+  // PBI
+  if (pbi) {
+    const rows = [];
+    const xy = pbi.measuredOffsetXY;
+    if (xy?.x !== undefined) {
+      const d = Math.sqrt((xy.x||0)**2 + (xy.y||0)**2) * 1e6;
+      const cls = d < 2 ? 'good' : d < 5 ? 'warn' : 'bad';
+      rows.push(['Offset X',   µm(xy.x)]);
+      rows.push(['Offset Y',   µm(xy.y)]);
+      rows.push(['|Offset|',   valSpan(d.toFixed(3) + ' µm', cls)]);
+    }
+    const th = pbi.measuredOffsetTheta?.value;
+    if (th !== undefined) rows.push(['Theta', `${(+th).toFixed(4)}°`]);
+    if (rows.length) parts.push(sec('Post Bond Inspection', rows));
+  }
+
+  // Alignment
+  if (ar?.alignments?.alignments?.length) {
+    const aln = ar.alignments.alignments[0];
+    const uc  = aln.ucAdjust;
+    const rows = [];
+
+    // XY / UV corrections (summary level)
+    const cxy = aln.measuredCorrectionXY;
+    const cuv = aln.measuredCorrectionUV;
+    if (cxy?.x !== undefined) {
+      const d = Math.sqrt((cxy.x||0)**2 + (cxy.y||0)**2) * 1e6;
+      const cls = d < 2 ? 'good' : d < 5 ? 'warn' : 'bad';
+      rows.push(['Korrektur XY',   `${µm(cxy.x)}, ${µm(cxy.y)}`]);
+      rows.push(['|Korr. XY|',     valSpan(d.toFixed(3) + ' µm', cls)]);
+    }
+    if (cuv?.x !== undefined)
+      rows.push(['Korrektur UV',   `${µm(cuv.x)}, ${µm(cuv.y)}`]);
+
+    const dist = aln.measuredBondingPositionFiducialDistance?.value;
+    if (dist !== undefined) rows.push(['Fiduz.-Abstand', mm(dist)]);
+
+    // Per-adjust-point details
+    for (const [label, pt] of [['Punkt 1', uc?.firstAdjustPoint], ['Punkt 2', uc?.secondAdjustPoint]]) {
+      if (!pt) continue;
+      const theta = pt.measuredCorrectionTheta?.value;
+      if (theta !== undefined) rows.push([`Theta ${label}`, deg(theta)]);
+      const cq = pt.componentFiducialResult?.thresholdQuality1?.quality?.value;
+      if (cq !== undefined) rows.push([`Komp.Qual. ${label}`, qualSpan(cq)]);
+      // Average tool fiducial quality
+      const tfrs = pt.toolFiducialResults?.toolFiducialResults || [];
+      if (tfrs.length) {
+        const allQ = tfrs.flatMap(t => (t.qualities1?.qualities || []).map(q => q.value).filter(v => v !== undefined));
+        if (allQ.length) {
+          const avg = allQ.reduce((a, b) => a + b, 0) / allQ.length;
+          rows.push([`Tool Qual. ${label}`, qualSpan(avg, true)]);
+        }
+      }
+    }
+    parts.push(sec('Alignment', rows));
+  }
+
+  // Pickup traces
+  if (pkr?.traces) {
+    const traces = pkr.traces;
+    const startTime = traces.startTime ? new Date(traces.startTime).toLocaleTimeString('de-DE') : '—';
+    const lastSample = traces.sampleTime?.at(-1) || '—';
+    const rows = [
+      ['Startzeit', startTime],
+      ['Dauer',     lastSample],
+    ];
+    parts.push(sec('Pickup', rows));
+
+    // Sparklines for key channels
+    const channels = [
+      { key: 'flipperZ',              label: 'Flipper Z',       color: '#58a6ff', scale: 1000,  unit: 'mm'   },
+      { key: 'flipperZCurrent',       label: 'Flipper Strom',   color: '#d29922', scale: 1,     unit: 'A'    },
+      { key: 'ejectNeedle',           label: 'Ejector Nadel',   color: '#bc8cff', scale: 1000,  unit: 'mm'   },
+      { key: 'ejectNeedleCurrent',    label: 'Ejector Strom',   color: '#e8795a', scale: 1,     unit: 'A'    },
+      { key: 'flipToolComponentVacuum', label: 'Vakuum (Flip)', color: '#3fb950', scale: 1,     unit: 'mbar' },
+    ];
+    const sparks = channels
+      .filter(ch => traces[ch.key]?.values?.length)
+      .map(ch => sparkRow(ch.label, traces[ch.key].values, ch.color, ch.scale, ch.unit))
+      .join('');
+    if (sparks) parts.push(`<div class="section"><div class="section-title">Pickup Traces</div><div class="spark-block">${sparks}</div></div>`);
+  }
+
+  document.getElementById('infoScroll').innerHTML = parts.join('');
+}
+
+// ─── HTML helpers ─────────────────────────────────────────────────────────────
+function sec(title, rows) {
+  return `<div class="section">
+    <div class="section-title">${title}</div>
+    ${rows.map(([k, v]) =>
+      `<div class="info-row">
+         <span class="info-key">${k}</span>
+         <span class="info-val">${v}</span>
+       </div>`
+    ).join('')}
+  </div>`;
+}
+
+function valSpan(v, cls) {
+  return `<span class="info-val ${cls}">${v}</span>`;
+}
+
+function qualSpan(q, isAvg = false) {
+  const v = +q;
+  const cls = v >= 80 ? 'good' : v >= 50 ? 'warn' : 'bad';
+  return valSpan((isAvg ? '⌀ ' : '') + v.toFixed(1), cls);
+}
+
+// ─── Sparkline ────────────────────────────────────────────────────────────────
+function sparkRow(label, rawValues, color, scale, unit) {
+  const nums = rawValues.map(v => {
+    const n = typeof v === 'string' ? parseFloat(v) : v;
+    return isFinite(n) ? n * scale : null;
+  }).filter(v => v !== null);
+  if (!nums.length) return '';
+
+  const vmin = Math.min(...nums);
+  const vmax = Math.max(...nums);
+  const range = vmax - vmin || 1;
+
+  const W = 300, H = 34, PAD = 2;
+  const n = nums.length;
+  const pts = nums.map((v, i) => {
+    const x = PAD + (i / (n - 1)) * (W - PAD * 2);
+    const y = H - PAD - ((v - vmin) / range) * (H - PAD * 2 - 4);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+
+  // Fill area below line
+  const fillPath = `M${pts[0]} ` + pts.slice(1).map(p => `L${p}`).join(' ')
+    + ` L${(PAD + (W - PAD*2)).toFixed(1)},${H} L${PAD},${H} Z`;
+
+  return `<div class="spark-row">
+    <div class="spark-head">
+      <span class="spark-label">${label}</span>
+      <span class="spark-range">${fmtSI(vmin, unit)} … ${fmtSI(vmax, unit)}</span>
+    </div>
+    <svg class="spark-svg" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      <path class="spark-fill" d="${fillPath}" fill="${color}"/>
+      <polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>
+    </svg>
+  </div>`;
+}
+
+function fmtSI(v, unit) {
+  if (Math.abs(v) < 0.001 && v !== 0) return (v * 1e6).toFixed(1) + ' µ' + unit;
+  if (Math.abs(v) < 1)     return (v * 1000).toFixed(2) + ' m' + unit;
+  return v.toFixed(3) + ' ' + unit;
+}
+
+// ─── Unit formatters ──────────────────────────────────────────────────────────
+function µm(v) {
+  if (v === undefined || v === null) return '—';
+  return (v * 1e6).toFixed(3) + ' µm';
+}
+function mm(v) {
+  if (v === undefined || v === null) return '—';
+  return (v * 1000).toFixed(4) + ' mm';
+}
+function deg(v) {
+  if (v === undefined || v === null) return '—';
+  return (v * 180 / Math.PI).toFixed(4) + '°';
+}
+
+// ─── Re-render on resize ──────────────────────────────────────────────────────
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (state.activePid) renderProduction(state.activePid);
+  }, 150);
+});
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+loadAll().catch(err => {
+  document.getElementById('loadingOverlay').innerHTML = `
+    <div style="color:var(--red);max-width:420px;text-align:center;padding:20px">
+      <div style="font-size:15px;margin-bottom:12px">Fehler beim Laden</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:16px">${err.message}</div>
+      <div style="font-size:12px;color:var(--muted);background:var(--bg3);padding:12px;border-radius:6px;font-family:monospace;text-align:left">
+        Starte einen lokalen Server im <b>grpc/</b> Verzeichnis:<br><br>
+        python -m http.server 8080<br><br>
+        Dann: <a href="http://localhost:8080" style="color:var(--accent)">localhost:8080</a>
+      </div>
+    </div>`;
+});
+</script>
+</body>
+</html>
