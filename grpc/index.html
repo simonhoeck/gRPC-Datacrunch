@@ -639,8 +639,14 @@ async function refreshProduction(pid) {
     prod.preproduction = preprod[0];
   }
 
-  // Re-render wafer maps (preserves pinnedCid)
-  renderProduction(pid);
+  // Re-render wafer maps without resetting the info panel
+  const savedInfo = document.getElementById('infoScroll').innerHTML;
+  const savedPin  = state.pinnedCid;
+  renderProduction(pid, false);  // resetInfo=false: skip showEmptyState()
+  // Restore info panel and pinned highlight
+  document.getElementById('infoScroll').innerHTML = savedInfo;
+  state.pinnedCid = savedPin;
+  if (savedPin) applyHighlight(savedPin);
 
   // Flash new dies
   requestAnimationFrame(() => {
@@ -786,7 +792,7 @@ function clearAll() {
   showEmptyState();
 }
 
-function renderProduction(pid) {
+function renderProduction(pid, resetInfo = true) {
   const prod = state.productions.get(pid);
   const pp = prod.preproduction?.report;
 
@@ -823,15 +829,15 @@ function renderProduction(pid) {
     'tgt'
   );
 
-  showEmptyState();
+  if (resetInfo) showEmptyState();
 }
 
 // ─── Wafer renderer ───────────────────────────────────────────────────────────
 function drawWafer(svgId, wrapId, comps, getPos, getColor, mapKey) {
   const svg  = document.getElementById(svgId);
   const wrap = document.getElementById(wrapId);
-  svg.innerHTML = '';
-  if (!comps.length) return;
+  if (!comps.length) { svg.innerHTML = ''; return; }
+  const frag = document.createDocumentFragment();
 
   const positions = comps.map(c => getPos(c));
   const allRows = positions.map(p => p.row);
@@ -873,7 +879,7 @@ function drawWafer(svgId, wrapId, comps, getPos, getColor, mapKey) {
       bg.setAttribute('height', ds);
       bg.setAttribute('fill', '#1a1f25');
       bg.setAttribute('rx', Math.max(1, ds * .08));
-      svg.appendChild(bg);
+      frag.appendChild(bg);
     }
   }
 
@@ -886,7 +892,7 @@ function drawWafer(svgId, wrapId, comps, getPos, getColor, mapKey) {
     t.setAttribute('text-anchor', 'middle');
     t.setAttribute('class', 'axis-lbl');
     t.textContent = c;
-    svg.appendChild(t);
+    frag.appendChild(t);
   }
   // Axis labels – rows (left)
   const rowStep = Math.max(1, Math.ceil(rowSpan / 8));
@@ -897,7 +903,7 @@ function drawWafer(svgId, wrapId, comps, getPos, getColor, mapKey) {
     t.setAttribute('text-anchor', 'end');
     t.setAttribute('class', 'axis-lbl');
     t.textContent = r;
-    svg.appendChild(t);
+    frag.appendChild(t);
   }
   // Axis origin label (0,0 bottom-left)
   const o = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -907,7 +913,7 @@ function drawWafer(svgId, wrapId, comps, getPos, getColor, mapKey) {
   o.setAttribute('class', 'axis-lbl');
   o.setAttribute('fill', '#3d6b8c');
   o.textContent = '0';
-  svg.appendChild(o);
+  frag.appendChild(o);
 
   // Draw dies
   for (let i = 0; i < comps.length; i++) {
@@ -934,8 +940,11 @@ function drawWafer(svgId, wrapId, comps, getPos, getColor, mapKey) {
     g.addEventListener('mouseenter', () => onHover(cid));
     g.addEventListener('mouseleave', () => onLeave());
     g.addEventListener('click',      () => onPin(cid));
-    svg.appendChild(g);
+    frag.appendChild(g);
   }
+
+  // Swap in all new content atomically — no intermediate blank frame
+  svg.replaceChildren(frag);
 
   // If pinned component is on this map, restore highlight
   if (state.pinnedCid) applyHighlight(state.pinnedCid);
