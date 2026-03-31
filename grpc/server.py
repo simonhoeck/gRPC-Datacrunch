@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-MONGO_HOST = os.getenv("MONGO_HOST", "ATRAPC0114")
+MONGO_HOST = os.getenv("MONGO_HOST", "localhost")
 MONGO_PORT = int(os.getenv("MONGO_PORT", "27017"))
 MONGO_USER = os.getenv("MONGO_USER", "admin")
 MONGO_PASS = os.getenv("MONGO_PASSWORD", "")
